@@ -1,45 +1,54 @@
-from Brain.conversation import conversation
+from Brain.conversation import add_to_conversation
 from Brain.SentenceHandler import SentenceHandler
 from Core.Action import Tools, call_tool
 from Core.State import GenerationState
-from Utils.Timer import SmallTimer
-from ollama import chat 
+# from Utils.Timer import SmallTimer
+from ollama import chat
+from Brain.conversation import input_data
 
-def when_think_end(sh:SentenceHandler,add_to_input_queue):
+_check_is_current_generation = None
+
+def when_think_end(
+    sh: SentenceHandler, add_to_input_queue
+):
     print("Brain end")
-    conversation.append(
-        {
-            "role": "assistant",
-            "content": sh.content,
-            "tool_calls": sh.tool_calls,
-        }
-    )
 
-    #调用工具
-    if sh.tool_calls:
+    if not sh.content and not sh.tool_calls:
+        print(",but no content")
+        add_to_input_queue(input_data("tool", "刚刚你恍惚了一下，没有任何输出"))
+        return
+
+
+    data = input_data("assistant", sh.content)
+
+    if not sh.tool_calls:
+        # 普通回答
+        add_to_conversation(data)
+    else:
+        # 调用工具
         try:
-            results = call_tool(sh.tool_calls)
-            handle_results(results,add_to_input_queue)
+            results = call_tool(
+                sh.tool_calls, add_to_input_queue
+            )
+            handle_results(results, add_to_input_queue)
         except Exception as e:
             print(f"call_tool error:{e}")
 
-def handle_results(results,add_to_input_queue):
-    for k,v in results.items():
-        print(k,v)
-        if k == "web_search":
-            v = v + "\n提取关键信息即可，总结成通俗易懂的几句话告知用户。"
-            add_to_input_queue(v)
-        else:
-            add_to_input_queue(v)
-        # if k == "remind" or k == "note_memory":
-        #     add_to_input_queue(v)
 
-        
-def think(inputStr, add_to_speak_queue,add_to_input_queue, myGen: GenerationState, pipeGen: GenerationState):
-    with pipeGen.lock:
-        myGen.generation = pipeGen.generation
+def handle_results(results, add_to_input_queue):
+    for k, v in results.items():
+        print(k, v)
+        tem_data = input_data("Tool", v, k)
+        add_to_input_queue(tem_data)
 
-    conversation.append({"role": "user", "content": inputStr})
+
+def think(
+    inputStr,
+    add_to_speak_queue,
+    add_to_input_queue,
+    myGen: GenerationState,
+    pipeGen: GenerationState,
+):
 
     stream = chat(
         # gemma3:1b,
@@ -49,19 +58,24 @@ def think(inputStr, add_to_speak_queue,add_to_input_queue, myGen: GenerationStat
         # deepseek-r1:8b
         # qwen3.5:9b
         model="qwen3.5:9b",
-        messages=conversation,
+        messages=inputStr,
         tools=Tools,
         stream=True,
-        think = False,
+        think=False,
+        keep_alive=-1,  #常驻显存
         options={
             # "num_predict": 256,
             "repeat_penalty": 1.3,
-            "temperature": 0.5,
+            "temperature": 1,
             "top_k": 40,
             "top_p": 0.9,
+            "num_ctx": 4096,
         },
-        
     )
+
+    def check_is_current_generation():
+        return pipeGen.check_is_current_generation(myGen)
+    _check_is_current_generation = check_is_current_generation
 
     sentenceHandler = SentenceHandler()
 
@@ -69,18 +83,22 @@ def think(inputStr, add_to_speak_queue,add_to_input_queue, myGen: GenerationStat
         for chunk in stream:
             if not pipeGen.check_is_current_generation(myGen):
                 print("思考中断")
-                when_think_end(sentenceHandler,add_to_input_queue)
+                when_think_end(
+                    sentenceHandler, add_to_input_queue
+                )
                 break
 
             currentSteamingText = sentenceHandler.handleStreamingText(chunk)
             if currentSteamingText:
                 add_to_speak_queue(currentSteamingText)
     except Exception as e:
-        print(f"stream error:{e}")
+        error_str = f"stream error:{e}"
+        print(error_str)
+        add_to_input_queue(input_data("assistant", error_str))
 
     if pipeGen.check_is_current_generation(myGen):
         print("思考正常结束")
-        when_think_end(sentenceHandler,add_to_input_queue)
+        when_think_end(sentenceHandler, add_to_input_queue)
 
 
 # if __name__ == "__main__":

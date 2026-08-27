@@ -1,8 +1,10 @@
-
 from Memory.MemoryDB import MemoryData
 from Memory.MemoryMgr import RecallData, memory_mgr
 import re
 from MCP.WebSearch import WebSearchMgr
+from MCP.ReadFile import ReadString
+from Brain.conversation import input_data
+
 
 
 def note_memory(content: str, summary: list[str]) -> str:
@@ -61,7 +63,7 @@ def remind(searchKey: list[str]) -> str:
         )
 
     """
-    results: list[RecallData]|None = memory_mgr.remind(searchKey)
+    results: list[RecallData] | None = memory_mgr.remind(searchKey)
     result_strs = []
     idx = 1
     if not results:
@@ -70,13 +72,13 @@ def remind(searchKey: list[str]) -> str:
         mid = cur.mid
         timeStr = cur.timeStr
         content = cur.content
-        resultStr =f"mid：{mid}。保存时间：{timeStr}。记忆片段：{content}" 
+        resultStr = f"mid：{mid}。保存时间：{timeStr}。记忆片段：{content}"
         result_strs.append(resultStr)
         idx += 1
     return "\n".join(result_strs)
 
 
-def change_thought(mid:str, content: str, summary: list[str]) -> str:
+def change_thought(mid: str, content: str, summary: list[str]) -> str:
     """
     当发现与之前记忆不一致时，可以修改记忆。
     一次只能修改一条，如需修改多条请多次调用。
@@ -106,16 +108,18 @@ def change_thought(mid:str, content: str, summary: list[str]) -> str:
     else:
         return "重写记忆失败"
 
+
 def get_now_time():
     """
     当你想获取当前时间，调用此函数。
-    返回格式：YYYY-MM-DD HH:MM:SS 的本地时间字符串。
+    返回的数据中的时间是24小时制的，格式：YYYY年MM月DD日 HH时MM分SS秒 的本地时间字符串。
     """
     from datetime import datetime
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    return "当前系统时间是" + datetime.now().strftime("%Y年%m月%d日 %H时%M分%S秒")
 
 
-def web_search(query:str)->str:
+def web_search(query: str) -> str:
     """
     当你需要获取当前不存在于知识库中的外部信息时调用。
 
@@ -131,21 +135,41 @@ def web_search(query:str)->str:
     参数:
     query: 搜索关键词
     """
-    return WebSearchMgr.web_search(query)+ "\n以上是网络的搜索结果，根据需要来提取信息进行回答吧。\n"
+    return WebSearchMgr.web_search(query)
 
 
-Tools = [web_search, note_memory, remind, change_thought,get_now_time]
+def web_fetch(url: str) -> str:
+    """
+    当你需要访问特定网页时调用。
+
+    参数:
+    url: 网页链接
+    """
+    return WebSearchMgr.web_fetch(url)
+
+def read_file():
+    """
+    当用户需要你读取附件时调用。
+    """
+    return ReadString.read_memo()
+
+
+Tools = [web_search, note_memory, remind, change_thought, get_now_time, read_file]
 ToolsMap = {func.__name__: func for func in Tools}
 
-def call_tool(tool_calls):
+def call_tool(tool_calls,add_to_input_queue):
     if not tool_calls:
         return
+
     results = {}
     for call in tool_calls:
         fun_name = call.function.name
         tool = ToolsMap.get(fun_name)
         if not tool:
             print("没找到对应tool：" + fun_name)
+
+            tem_data = input_data("Tool", "Tool {fun_name} not found", fun_name)
+            add_to_input_queue(tem_data)
             continue
 
         try:
@@ -153,6 +177,7 @@ def call_tool(tool_calls):
             results[fun_name] = result
         except Exception as e:
             print(f"执行函数 {fun_name} 时出错: {e}")
-            results[fun_name] = "error"
+            tem_data = input_data("Tool", f"Tool {fun_name} errer:{e}", fun_name)
+            add_to_input_queue(tem_data)
 
     return results

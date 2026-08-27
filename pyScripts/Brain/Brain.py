@@ -2,6 +2,7 @@
 from queue import Empty, Queue
 from Brain.ollama import think
 from Core.State import GenerationState, SpeakTask
+from Brain.conversation import add_to_conversation, get_full_conversation,input_data
 
 
 def brain_loop(input_text_queue:Queue, to_speak_queue:Queue, pipelineState: GenerationState):
@@ -12,21 +13,24 @@ def brain_loop(input_text_queue:Queue, to_speak_queue:Queue, pipelineState: Gene
             task = SpeakTask(generate_state.generation,str)
             to_speak_queue.put(task)
 
-    def add_to_input_queue(str):
-         if str.strip() != "":
-            input_text_queue.put(str)
+    def add_to_input_queue(data:input_data):
+        if data.content.strip() != "":
+            input_text_queue.put(data)
+
 
     while True:
         try:
-            inputStr = input_text_queue.get(timeout = 1)
+            inputData = input_text_queue.get(timeout = 1)
         except Empty:
             print(".",end="")
             continue
 
-        if not inputStr:
+        if not inputData:
             continue
         pipelineState.update_newest_generation(generate_state)
-        if not pipelineState.check_is_current_generation(generate_state):
-            continue
+
+        add_to_conversation(inputData)
         
-        think(inputStr, add_to_speak_queue,add_to_input_queue, generate_state, pipelineState)
+        input_str = get_full_conversation()
+        think(input_str, add_to_speak_queue,add_to_input_queue, generate_state, pipelineState)
+

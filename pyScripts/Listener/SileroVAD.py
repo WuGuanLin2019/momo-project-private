@@ -20,14 +20,14 @@ BLOCK_SIZE = 512  # Silero VAD 标准块大小（32ms @ 16kHz）
 
 # VAD 参数
 SPEECH_THRESHOLD = 0.5  # 语音概率阈值
-SILENCE_DURATION = 0.8  # 静音持续多少秒后停止录音（容忍停顿）
+SILENCE_DURATION = 0.6  # 静音持续多少秒后停止录音（容忍停顿）
 MIN_SPEECH_DURATION = 0.3  # 最短有效语音时长，避免误触发
 
 # 音量阈值（RMS）
 VOLUME_THRESHOLD = 0.015
 
 # RingBuffer 预留 ms 数
-RING_MS = 500  # 缓存最近 300ms
+RING_MS = 800  # 缓存最近
 RING_SIZE = int(FS * (RING_MS / 1000))  # 计算 samples 数
 
 # 加载 Silero VAD 模型
@@ -157,7 +157,7 @@ class AudioStreamListener:
     ):
         self.result_queue = Queue()
         self.pipelineState = pipelineState
-        self.event_is_talking = event_is_talking
+        # self.event_is_talking = event_is_talking
 
         # 状态变量
         self.audio_buffer = []  # 录音数据累积
@@ -257,7 +257,7 @@ class AudioStreamListener:
                     time.sleep(0.01)
                     continue
             
-                print(f"duration:{duration}, isDone:{self.to_send_last_audio_chunk}")
+                # print(f"duration:{duration}, isDone:{self.to_send_last_audio_chunk}")
                 try:
                     audio_np = np.array(self.audio_buffer, dtype=np.float32)
                     self.audio_buffer.clear()

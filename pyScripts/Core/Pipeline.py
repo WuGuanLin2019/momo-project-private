@@ -5,8 +5,6 @@ from Listener import loop as listener_loop
 from Brain import loop as brain_loop
 from Express import loop as express_loop
 
-
-
 class AssistantPipeline:
     def __init__(self):
         # 主线程创建所有队列，成为唯一的数据流管理者

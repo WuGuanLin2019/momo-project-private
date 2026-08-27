@@ -12,8 +12,8 @@ _tts_session = requests.Session()
 
 def request_audio_data(text):
     #使用melo
-    with SmallTimer("request melo"):
-        resp = _tts_session.post(f"http://127.0.0.1:{TTS_PORT}/tts", json={"text": text}, timeout=180)
+    # with SmallTimer("request melo"):
+    resp = _tts_session.post(f"http://127.0.0.1:{TTS_PORT}/tts", json={"text": text}, timeout=180)
     # print(f"[tts_client] status={resp.status_code}, content-type={resp.headers.get('content-type')}, len={len(resp.content)}")
     
     if resp.status_code != 200:

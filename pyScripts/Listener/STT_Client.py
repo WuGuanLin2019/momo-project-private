@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import simpleaudio as sa
 import requests
@@ -5,6 +6,7 @@ import io
 import soundfile as sf
 from Listener.SileroVAD import AudioBufferData
 from Utils.Tool import clearQueue
+from Brain.conversation import input_data
 
 STT_PORT = 5003
 
@@ -46,24 +48,27 @@ def interage_audio_text():
     )
 
 def STT_Loop(abDatas,input_text_queue,check_generate_break):
-    current_input_txt = ""
+    # current_input_txt = ""
     while True:
         if check_generate_break():
             clearQueue(input_text_queue)
             interage_audio_text()
+            time.sleep(0)
             continue
 
         abData = abDatas.get()
         audio_str,is_done = request_audio_text(abData)
 
-        if audio_str:
-            current_input_txt = current_input_txt + audio_str
+        # if audio_str and not is_done:
+        #     current_input_txt = current_input_txt + audio_str
 
         if not is_done:
             continue
 
-        print(f"语音流式识别结果：{current_input_txt}")
-        input_text_queue.put(current_input_txt)
+        # if is_done:
+        #     current_input_txt = ""
 
-        if is_done:
-            current_input_txt = ""
+        print(f"语音流式识别结果：{audio_str}")
+
+        tem_data = input_data("user",audio_str or "")
+        input_text_queue.put(tem_data)
