@@ -1,6 +1,7 @@
 
 from queue import Empty, Queue
-from Brain.ollama import think
+from Brain.Emotion.EmotionMgr import emotion_update
+from LangChain.Generate import think
 from Core.State import GenerationState, SpeakTask
 from Brain.conversation import add_to_conversation, get_full_conversation,input_data
 
@@ -8,7 +9,7 @@ from Brain.conversation import add_to_conversation, get_full_conversation,input_
 def brain_loop(input_text_queue:Queue, to_speak_queue:Queue, pipelineState: GenerationState):
     generate_state = GenerationState()
 
-    def add_to_speak_queue(str):
+    def add_to_speak_queue(str:str):
         if str.strip() != "":
             task = SpeakTask(generate_state.generation,str)
             to_speak_queue.put(task)
@@ -19,6 +20,8 @@ def brain_loop(input_text_queue:Queue, to_speak_queue:Queue, pipelineState: Gene
 
 
     while True:
+        emotion_update()
+
         try:
             inputData = input_text_queue.get(timeout = 1)
         except Empty:
@@ -31,6 +34,8 @@ def brain_loop(input_text_queue:Queue, to_speak_queue:Queue, pipelineState: Gene
 
         add_to_conversation(inputData)
         
-        input_str = get_full_conversation()
-        think(input_str, add_to_speak_queue,add_to_input_queue, generate_state, pipelineState)
+        # input_str = get_full_conversation()
+        # think(input_str, add_to_speak_queue,add_to_input_queue, generate_state, pipelineState)
+        
+        think(inputData.content, add_to_speak_queue, generate_state, pipelineState)
 

@@ -74,7 +74,7 @@ class VTubeClient:
             "InjectParameterDataRequest",
             {
                 "faceFound": False,
-                "mode": "set",
+                "mode": "add",
                 "parameterValues": [{"id": "MouthOpen", "value": current_volume}],
             },
         )
