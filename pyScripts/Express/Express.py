@@ -32,15 +32,12 @@ def _init_event(speak_data_mgr: SpeakDataMgr, pipelineState: GenerationState):
             text=message_str,
             taskType=SpeakTaskType.reading,
             speed=speed,
+            is_tail = True,
         )
         speak_data_mgr.add_data(task)
 
-    def _on_continue_read(_=None):
-        speak_data_mgr.keep_data(SpeakTaskType.reading)
-
     eventDispatch.register(ReadingEvent.read_text, _on_reccept_message)
-    eventDispatch.register(ReadingEvent.read_next_sentence, _on_continue_read)
-
+    
     def _to_trigger_vtube_hot_key(hot_key_name):
         MomoVTube.to_trigger_hot_key(hot_key_name)
         # import traceback

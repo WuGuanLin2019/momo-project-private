@@ -4,6 +4,7 @@ import time
 from Brain.Context.PromptMgr import PromptData
 from Core.Input.InputDataMgr import InputData, InputSource
 from DrawBridge import DrawBridgeServer
+from DrawBridge.BulletChat.BulletChatEvent import BulletChatEvent
 from Express.ExpressEvent import ExpressEvent
 from Express.SpeakDataMgr import SpeakTask, SpeakTaskType
 from Listener.ListenEvent import ListenEvent
@@ -37,11 +38,20 @@ class BulletChatMgr:
         eventDispatch.register(DrawBridgeEvent.on_receive_message, self._on_receive_draw_bridge_message)
         eventDispatch.register(ExpressEvent.on_tts_end,self._on_tts_finish)
 
-    def _start():
-        pass
+        eventDispatch.register(BulletChatEvent.start_listening,self._start_listening)
+        eventDispatch.register(BulletChatEvent.stop_listening,self._stop_listening)
+        eventDispatch.register(BulletChatEvent.receive_current_bullet_chat,self._receive_current_bullet_chat)
 
-    def _stop():
-        pass
+
+    def _start_listening(self,_data = None):
+        self._start_loop()
+
+    def _stop_listening(self,_data = None):
+        self._stop = True
+
+    def _receive_current_bullet_chat(self,_data = None):
+        self._request_bridge_data()
+        self.has_new_data = False
 
     def _on_tts_finish(self, speak_data):
         task:SpeakTask = speak_data["task"]
@@ -62,13 +72,14 @@ class BulletChatMgr:
             return
         self.is_responding = True
         bullet_str = f"""<弹幕>{text}</弹幕> """
+        logging.info(f"发送弹幕给momo:\n{bullet_str}")
         data = InputData(InputSource.BulletChat, bullet_str)
         eventDispatch.dispatch(ListenEvent.push_input_data, data)
 
     def get_data(self):
         self.has_new_data = True
     
-    def _request_bridge_data(self):
+    def _request_bridge_data(self,_data = None):
         DrawBridgeServer.send_message( BRIDGE_UNIQUE, {"action": "get_data"})
 
     def _on_finish_respone_bullet_chat(self):

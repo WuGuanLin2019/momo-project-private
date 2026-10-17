@@ -7,6 +7,7 @@ from fastapi import FastAPI, WebSocket
 import uvicorn
 
 from DrawBridge.DrawBridgeEvent import DrawBridgeEvent
+from DrawBridge import DrawBridgeNeedle
 from Utils.EventDispatch import eventDispatch
 
 clients_list: dict[str, WebSocket] = {}

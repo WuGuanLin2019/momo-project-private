@@ -2,6 +2,7 @@ import logging
 import threading
 import time
 from langchain_core.messages import AIMessageChunk
+from Brain.BrainEvent import BrainEvent
 from Core.Input.InputDataMgr import InputData, InputDataMgr, InputSource
 from Express.ExpressEvent import ExpressEvent
 from LangChain.Internal.MomoInternal import add_momo_internal_task
@@ -50,7 +51,7 @@ def _agent_stream(inputData: InputData, input_data_mgr:InputDataMgr, check_is_cu
         {"messages": [{"role": "user", "content": inputData.content}]},
         config={"configurable": {"thread_id": MAIN_AGENT}},
         stream_mode=["messages", "updates"],
-        context=AgentMetaContext(MAIN_AGENT)
+        context=AgentMetaContext(MAIN_AGENT,inputData)
     )
 
     current_speak_task = None
@@ -142,11 +143,14 @@ def _agent_stream(inputData: InputData, input_data_mgr:InputDataMgr, check_is_cu
     info = {"done": True, "message": {"content": ""}}
     currentStreamingText = sentenceHandler.handleStreamingText(info)
     if currentStreamingText:
-        add_to_speak_queue(currentStreamingText,is_end = True, input_type = inputData.source)
+        add_to_speak_queue(currentStreamingText,is_end = True, input_source = inputData.source)
     else:
         #设置speak_queue最后一个元素的末尾标记
         if current_speak_task:
             current_speak_task.is_tail = True
+
+    if not is_answering:
+        eventDispatch.dispatch(BrainEvent.on_empty_content_respone,inputData.source)
 
 
 def _after_response():

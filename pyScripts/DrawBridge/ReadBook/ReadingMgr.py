@@ -1,11 +1,17 @@
 import logging
 import threading
 import time
+from typing import Any
 
+from Brain.BrainEvent import BrainEvent
 from Brain.Context.AgentStatusMgr import AgentStatusPiecer, StatusData
-from langchain.tools import tool
+from langchain.tools import ToolRuntime, tool
+from Core.Input.InputDataMgr import InputSource
+from LangChain.AgentMeta import AgentMetaContext
 from Brain.Context.PromptMgr import PromptData
 from Brain.Context.ToolMgr import ToolData
+from DrawBridge.BulletChat.BulletChatEvent import BulletChatEvent
+from DrawBridge.DrawBridgeNeedle import drawBridgeNeedle
 from Express.ExpressEvent import ExpressEvent
 from Express.SpeakDataMgr import SpeakTaskType
 from LangChain.Agent import agentMgr
@@ -94,27 +100,33 @@ class ReadingMgr:
         return self.state.focusContent
 
     def _build_tools(self):
+        _NO_RUNTIME: Any = None
+
         @tool(return_direct=True)
-        def read_next_sentence():
+        def read_next_sentence(runtime: ToolRuntime[AgentMetaContext] = _NO_RUNTIME,):
             """以下时机调用此接口：
                 当用户明确让你继续阅读时；
                 当你觉得用户话已经表达完整了，或者后续没有继续表达的意图时。"""
 
-            is_reading = not self.state.isPause
-            if is_reading:
-                eventDispatch.dispatch(ReadingEvent.read_next_sentence)
+            if self.state.isPause:
+                # 从暂停恢复：重置状态后继续读（当前句或下一句）
+                self.state.ResetState()
+                self._continue_or_next()
+            elif self.state.speechState == SpeechState.Finish:
+                # 当前句已正常读完，momo 选择沉默，推进到下一句
+                self.handle_silence()
+            elif self.is_talking:
+                # 原文还在朗读中：先记为沉默，等 on_reading_tts_end 再推进，
+                # 避免直接续读导致两段 TTS 重叠
                 self.handle_silence()
             else:
-                if self.is_talking:
-                    return "有感想要发表时，不可调用此接口。本次调用取消。"
-
+                # 阅读被打断（例如用户让 momo 改速度）：speech 未 Finish 且 TTS 已停止，
+                # on_reading_tts_end 不会再触发，直接按新语速重读当前句
                 self.state.ResetState()
-                if not self.cur_focusing_str:
-                    self.request_next_sentence()
-                else:
-                    self._continue_reading()
+                self._continue_or_next()
 
             self.state.isPause = False
+            eventDispatch.dispatch(BulletChatEvent.stop_listening)
             return "等待下一句原文输入。"
 
         @tool(return_direct=True)
@@ -154,31 +166,21 @@ class ReadingMgr:
 
         return [pause_reading,read_next_sentence, reading_from_selected_place, change_reading_speed]
 
-    def start_reading(self, event_is_talking: "threading.Event | None" = None):
-        """兼容旧调用：直接派发「开始阅读」命令事件。
-
-        真正的工作在 _on_start_read_command 里完成，这样键盘/网页/语音等任何触发源
-        只要 dispatch(ReadingEvent.start_read) 就能开阅读，不必直接依赖本类。
-        """
-        eventDispatch.dispatch(ReadingEvent.start_read, event_is_talking)
-
-    def end_read(self):
-        """兼容旧调用：派发「结束阅读」命令事件。"""
-        eventDispatch.dispatch(ReadingEvent.finish_read)
-
     def _on_start_read_command(self, event_is_talking: "threading.Event | None" = None):
         if event_is_talking is not None:
             self.event_is_talking = event_is_talking
+        eventDispatch.register(BrainEvent.on_empty_content_respone, self.on_empty_content_respone)
         eventDispatch.register(ExpressEvent.on_tts_end, self._on_finish_tts)
         eventDispatch.register(
             DrawBridgeEvent.on_receive_message, self._on_receive_draw_bridge_message
         )
-        # 注意：这里不再 dispatch(ReadingEvent.start_read)，否则会和上面的订阅形成递归
+
+        eventDispatch.dispatch(BulletChatEvent.stop_listening)
         self._register_agent_hooks()
         self.state.ResetState()
         self.request_next_sentence()
 
-    def _on_end_read_command(self):
+    def _on_end_read_command(self,_data = None):
         try:
             self._unregister_agent_hooks()
         finally:
@@ -186,6 +188,7 @@ class ReadingMgr:
                 DrawBridgeEvent.on_receive_message, self._on_receive_draw_bridge_message
             )
             eventDispatch.unregister(ExpressEvent.on_tts_end, self._on_finish_tts)
+            eventDispatch.dispatch(BulletChatEvent.start_listening)
 
     def _register_agent_hooks(self):
         ins = agentMgr.get_agent_ins(_READING_AGENT_NAME_)
@@ -240,6 +243,10 @@ class ReadingMgr:
     def request_focus_on_selected(self):
         DrawBridgeServer.send_message(BRIDGE_UNIQUE, {"action": "focus_on_selection"}, True)
 
+    def on_empty_content_respone(self,input_data_source:InputSource):
+        if input_data_source == InputSource.Microphone:
+            pass            
+
     def _on_finish_tts(self, speak_data):
         if self.anim_timer:
             self.anim_timer.cancel()
@@ -249,19 +256,18 @@ class ReadingMgr:
             return
 
         task = speak_data["task"]
+        if not task.is_tail:
+            return
+            
         # logging.info(f"on_finish_tts: {task.taskType}")
         if task.taskType == SpeakTaskType.reading:
             self._on_reading_tts_end()
-        elif (
-            task.taskType == SpeakTaskType.normal
-            or task.taskType == SpeakTaskType.bulletChatRespone
-        ):
-            # 其他回复后继续自动往下读
-            if self.state.isPause:
-                return
+        elif task.taskType == SpeakTaskType.normal:
             self._on_normal_tts_end(task)
         elif task.taskType == SpeakTaskType.reading_thought:
             self._on_react_tts_end(task)
+        elif task.taskType == SpeakTaskType.bulletChatRespone:
+            self._on_bullet_chat_res_tts_end(task)
 
     def _on_interrupt(self):
         self.state.SetState(react=ReactionState.NotYet)
@@ -292,21 +298,42 @@ class ReadingMgr:
             self.request_next_sentence()
 
     def _on_normal_tts_end(self, task):
-        if task.is_tail:
+        #之前是暂停状态，就不顺着读下去了
+        if self.state.isPause:
+            eventDispatch.dispatch(ReadingEvent.pause_read)
+            eventDispatch.dispatch(BulletChatEvent.start_listening)
+            return
+
+        new_input_flag = drawBridgeNeedle.needle("get_new_input_after_reading_thought")
+        if new_input_flag:
+            return
+
+        # 主动停顿一下
+        time.sleep(0.5)
+        self.state.ResetState()
+        if not self.cur_focusing_str:
+            self.request_next_sentence()
+        else:
+            self._continue_reading()
+
+    def _on_react_tts_end(self,task):
+        self.state.SetState(react=ReactionState.Finish)
+
+        new_input_flag = drawBridgeNeedle.needle("get_new_input_after_reading_thought")
+        if not new_input_flag:
             # 主动停顿一下
             time.sleep(0.5)
             self.state.ResetState()
-            if not self.cur_focusing_str:
-                self.request_next_sentence()
-            else:
-                self._continue_reading()
+            self.request_next_sentence()
+    
 
-    def _on_react_tts_end(self,task):
-        if task.is_tail:
-            self.state.SetState(react=ReactionState.Finish)
-            # 主动停顿一下
-            time.sleep(0.5)
-            self._advance_if_ready()
+    def _on_bullet_chat_res_tts_end(self,task):
+        if self.state.isPause:
+            return
+            
+        time.sleep(0.5)
+        self.state.ResetState()
+        self.request_next_sentence()
 
     def _advance_if_ready(self):
         if self.state.speechState != SpeechState.Finish:
@@ -320,8 +347,14 @@ class ReadingMgr:
             self.state.ResetState()
             self.request_next_sentence()
 
+    def _continue_or_next(self):
+        """续读：有当前句就重读当前句，否则取下一句。"""
+        if self.cur_focusing_str:
+            self._continue_reading()
+        else:
+            self.request_next_sentence()
+
     def _continue_reading(self):
-        logger.debug("阅读原文ing")
         # 原文片段
         read_message = self.cur_focusing_str
 
@@ -343,10 +376,9 @@ class ReadingMgr:
                     focusContent += "【此处翻页】"
                 input_str = get_read_prompt(focusContent)
                 eventDispatch.dispatch(ReadingEvent.consider_text, input_str)
-                #接受弹幕？
 
     def handle_silence(self):
-        logger.debug("保持沉默")
+        logging.info("保持沉默")
         self.state.SetState(react=ReactionState.Silence)
         self.state.focusContent = ""
         self.state.isPageEnd = False
