@@ -45,7 +45,12 @@ desktop.ini
 showcase/
 
 # ===== 第三方依赖（不随仓库分发，见 third_party/README.md）=====
-# 例外（自研代码，需 git add -f 保留跟踪）：
+# 纳入跟踪的自研代码：
 #   third_party/README.md
-#   third_party/Funasr/Funasr_server.py
-/third_party/
+#   third_party/Funasr/Funasr_server.py + start_server.bat（需 git add -f）
+#   third_party/Submit/（字幕插件）
+#   third_party/Debug/（调试查看器；context/ 快照为运行时数据，不入库）
+/third_party/*
+!/third_party/Submit/
+!/third_party/Debug/
+/third_party/Debug/context/

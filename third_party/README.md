@@ -1,7 +1,9 @@
 # third_party 依赖说明
 
-本目录存放项目运行所需的第三方依赖，**不纳入 git 仓库**（体积大、上游可追溯、LICENSE 各异）。
+本目录存放项目运行所需的第三方依赖，**大部分不纳入 git 仓库**（体积大、上游可追溯、LICENSE 各异）。
 克隆/恢复环境时请从各上游仓库获取，建议记录所使用的 commit 以保证可复现。
+
+其中 **Submit/ 与 Debug/ 为自研插件，纳入 git 跟踪**（规则见根目录 `.gitignore`）。
 
 | 目录 | 用途 | 上游项目 |
 |---|---|---|
@@ -15,8 +17,8 @@
 | `blivedm-dev/` | B 站直播弹幕接入 | https://github.com/xfgryujk/blivedm |
 | `ffmpeg-8.1.2-full_build-shared/` | FFmpeg 运行时（音频处理） | https://ffmpeg.org/ |
 | `PDF/` | PDF.js 相关资源 | https://github.com/mozilla/pdf.js |
-| `Debug/` | 调试输出（非依赖，可删除） | — |
-| `Submit/` | 空目录 | — |
+| `Debug/` | **自研**：LLM 上下文调试查看器（debugViewer.html / debugViewer.js） | 纳入 git 跟踪；`context/` 为运行时快照，不入库 |
+| `Submit/` | **自研**：OBS/直播字幕插件（WebSocket 接收 + 时间轴逐字渲染，抗浏览器后台节流） | 纳入 git 跟踪 |
 
 ## 环境隔离
 

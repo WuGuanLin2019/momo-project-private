@@ -1,0 +1,4 @@
+例如，网络搜索工具（web_search）、内部知识库检索
+工具（knowledge_base_search）、阅读网页工具（fetch_url）、搜索文件名工具（find_file）、搜索文件内容工具
+（grep_file）、读文件工具（read_file）。上面的文本进tts时必定失败，定位问题[tts_client] 解码音频失败: Error opening <_io.BytesIO object at 0x000001198BB89A80>: Format not recognised.
+[tts_client] 前200字节: b'{"error":""}'
