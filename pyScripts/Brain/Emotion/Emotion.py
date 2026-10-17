@@ -29,10 +29,11 @@ class BaseEmotion:
         if len(self.attrs) == 0:
             return "当前没有情绪。"
 
-        result = "状态值均为float，范围0~1\n"
+        result = "<emotion>状态值均为float，范围0~1\n"
         for attr in self.attrs:
-            result += f"{attr.name}: {attr.value}({attr.desc})\n"
+            result += f"<{attr.name}>{round(attr.value,4) }({attr.desc})</{attr.name}>\n"
 
+        result += "</emotion>"
         return result
 
     def change_attr(self, name: str, value: float):
@@ -49,7 +50,7 @@ class BaseEmotion:
 
 class MomoEmotion(BaseEmotion):
     def __init__(self):
-        super().__init__("Momo")
+        super().__init__("momo_internal")
 
 
     def _init_attr(self):

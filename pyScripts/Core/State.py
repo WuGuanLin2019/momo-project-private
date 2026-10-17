@@ -1,3 +1,4 @@
+from enum import Enum
 import threading
 from dataclasses import dataclass
 
@@ -29,8 +30,3 @@ class GenerationState:
     def update_newest_generation(self, diffGenerationState: "GenerationState"):
         with self.lock:
             diffGenerationState.generation = self.generation
-
-@dataclass
-class SpeakTask:
-    generation_id: int
-    text: str

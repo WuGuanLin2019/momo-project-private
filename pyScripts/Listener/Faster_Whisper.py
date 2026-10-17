@@ -40,6 +40,6 @@ def audio_to_text(audio_float):
     # print("\n——下一次录音——\n")
     return text,True
 
-if __name__ == "__main__":
-    audio_float = getAudioFloatFromWav("Temp/inputWords.wav")
-    audio_to_text(audio_float)
+# if __name__ == "__main__":
+#     audio_float = getAudioFloatFromWav("Temp/inputWords.wav")
+#     audio_to_text(audio_float)

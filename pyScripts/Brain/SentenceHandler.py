@@ -1,6 +1,6 @@
 from typing import Any
 
-TEXT_CUT = ["！", "。", "？", "，", "!", "：", "~", ",", ".", ":"]
+TEXT_CUT = ["！","、", "。", "？", "，", "!", "：", "~", ",", ":"]
 
 
 class SentenceHandler:
@@ -31,10 +31,10 @@ class SentenceHandler:
         return False, None
 
     def handleStreamingText(self, chunk: dict[str, Any]):
-        message: dict[str, Any] = chunk.get("message","") 
-        content = message.get("content","")
+        message: dict[str, Any] = chunk.get("message", "")
+        content = message.get("content", "")
         isDone = chunk.get("done", False)
-        thinking = message.get("thinking","")
+        thinking = message.get("thinking", "")
 
         if thinking:
             self.thinking += thinking
@@ -52,16 +52,12 @@ class SentenceHandler:
                 self.last_cut_str_tail = None
 
             is_cut, self.last_cut_str_tail = self.judge_cut_text(text)
-            if (
-                is_cut
-                and self.last_cut_str_tail is not None
-                and self.last_cut_str_tail != ""
-            ):
+            if is_cut and self.last_cut_str_tail:
                 text = text[: -len(self.last_cut_str_tail)]
 
             self.current_sentence += str(text)
 
-            if is_cut or isDone:
+            if (is_cut and len(self.current_sentence)>=3 ) or isDone:
                 output = self.current_sentence
                 self.content += self.current_sentence
                 self.current_sentence = ""
@@ -77,7 +73,6 @@ class SentenceHandler:
             output = self.current_sentence
             self.content += self.current_sentence
             self.current_sentence = ""
-            # print(output + "\n")
             return output
 
         return None

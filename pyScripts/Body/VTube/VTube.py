@@ -13,7 +13,7 @@ from Utils.Timer import SmallTimer
 VTUBE_WS_URL = "ws://127.0.0.1:8001"
 PLUGIN_NAME = "Momo"
 PLUGIN_DEVELOPER = "W_____u"
-FRAME_RATE = 60  # 每秒更新嘴型次数
+FRAME_RATE = 30  # 每秒更新嘴型次数
 
 
 class VTubeClient:
@@ -25,7 +25,7 @@ class VTubeClient:
     def start(self):
         self._connect()
 
-        threading.Thread(target=self.reconnect_loop, daemon=True).start()
+        # threading.Thread(target=self.reconnect_loop, daemon=True).start()
 
     def _connect(self):
         self.ws = websocket.WebSocketApp(
@@ -46,7 +46,10 @@ class VTubeClient:
             "messageType": messageType,
             "data": data,
         }
-        self.ws.send(json.dumps(request))
+        try:
+            self.ws.send(json.dumps(request))
+        except Exception as e:
+            print(f"[VTubeClient] 发送请求失败: {e}")
 
     def request_token(self):
         self.send_request(
@@ -79,6 +82,16 @@ class VTubeClient:
             },
         )
 
+    def to_trigger_hot_key(self, hot_key_name):
+        """通过热键触发动画。
+        hot_key_name = VTS 中配置好的 TriggerAnimation 热键的【名字或ID】
+                    （按名字触发时大小写不敏感；同名只执行第一个）。
+        """
+        if not self.connected:
+            print(f"[VTubeClient] 未连接，无法触发热键: {hot_key_name}")
+            return
+        self.send_request("HotkeyTriggerRequest", {"hotkeyID": hot_key_name})
+
     def on_open(self, ws):
         print("✅ WebSocket 已连接，请求🔑 Token")
         self.request_token()
@@ -103,10 +116,12 @@ class VTubeClient:
 
     def on_error(self, error):
         self.connected = False
+        self.ws = None
         print("❌ WebSocket 错误:", error)
 
     def on_close(self, code, msg):
         self.connected = False
+        self.ws = None
         print("🔒 WebSocket 已关闭", code, msg)
 
     # ----------------------------
@@ -137,19 +152,18 @@ class VTubeClient:
 
         return volumes
 
-
     def drive_mouth(self, audio_data, sample_rate, startCB, check_generate_break):
-        if not self.connected:  
+        if not self.connected:
             return
 
         volumes = []
         # with SmallTimer("cal_volumes"):
         volumes = self.cal_volumes(audio_data, sample_rate)
         if volumes is None:
-            return 
+            return
 
-        playObject = startCB(audio_data,sample_rate)
-        
+        playObject = startCB(audio_data, sample_rate)
+
         start_time = time.perf_counter()
         total_frames = len(volumes)
         last_frame_idx = -1
@@ -158,7 +172,7 @@ class VTubeClient:
                 if playObject and playObject.is_playing():
                     playObject.stop()
                 self.send_mouth_param(0)
-                return
+                return 0
 
             elapsed = time.perf_counter() - start_time
             frame_idx = int(elapsed * FRAME_RATE)
@@ -172,7 +186,6 @@ class VTubeClient:
 
             time.sleep(1 / FRAME_RATE)
 
-
         # print("✅ 嘴型结束")
         self.send_mouth_param(0)
         return True
@@ -181,14 +194,14 @@ class VTubeClient:
         while True:
             time.sleep(3)
             if self.connected:
-                return
+                continue
 
             if not self.ws:
+                print("尝试连接VTube Studio...")
                 self._connect()
-                return
-
-            print("尝试连接VTube Studio...")
-            try:
-                self.request_token()
-            except Exception as e:
-                print(e)
+            else:
+                try:
+                    self.request_token()
+                except Exception as e:
+                    print(e)
+                    self.ws = None

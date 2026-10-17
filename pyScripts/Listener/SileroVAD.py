@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from queue import Empty, Queue
 import threading
-import keyboard
 from numpy.typing import NDArray
 import sounddevice as sd
 import numpy as np
@@ -164,25 +163,55 @@ class AudioStreamListener:
         self.is_speaking = False  # 当前是否在说话
         self.silence_blocks = 0  # 连续静音块计数
         self.speech_blocks = 0  # 连续语音块计数
-               
+        self.mic_paused = False  # 麦克风是否暂停：暂停时 callback 直接丢弃音频，等同“无法录音”
+
         self.ring_buffer = deque(maxlen=RING_SIZE)  # 初始化环形缓冲
 
-        # 创建并启动输入流
-        self.stream = sd.InputStream(
-            channels=CHANNELS,
-            samplerate=FS,
-            blocksize=BLOCK_SIZE,
-            callback=self.callback,
-            dtype=np.float32,  # Silero VAD 需要 float32 格式
-        )
-
-        print("🔇 保持安静，说话时将自动开始录音...\n")
-        self.stream.start()
+        self.stream = None
+        self._open_stream()
+        threading.Thread(target=self._stream_monitor, daemon=True).start()
 
         self.audio_record_chunks = []
         self.to_send_last_audio_chunk = False
 
+    def _open_stream(self):
+        if self.stream is not None and not getattr(self.stream, "closed", True):
+            try:
+                self.stream.close()
+            except Exception:
+                pass
+
+        try:
+            # 创建并启动输入流
+            self.stream = sd.InputStream(
+                channels=CHANNELS,
+                samplerate=FS,
+                blocksize=BLOCK_SIZE,
+                callback=self.callback,
+                dtype=np.float32,  # Silero VAD 需要 float32 格式
+            )
+            
+            self.stream.start()
+            print("🔇 保持安静，说话时将自动开始录音...\n")
+            return True
+        except sd.PortAudioError as e:
+            print(f"⚠️ 麦克风暂不可用，2 秒后重试: {e}")
+            self.stream = None
+            return False
+
+    def _stream_monitor(self):
+        while True:
+            time.sleep(2)
+            if (
+                self.stream is None
+                or getattr(self.stream, "closed", True)
+                or not self.stream.active
+            ):
+                self._open_stream()
+
     def callback(self, indata, frames, time, status):
+        if self.mic_paused:  # 麦克风暂停：直接丢弃音频，不采集、不跑 VAD
+            return
         if status:
             print(f"⚠️ 状态异常: {status}")
             # return
@@ -191,7 +220,6 @@ class AudioStreamListener:
         audio_chunk = indata[:, 0].copy()
         self.audio_record_chunks.extend(audio_chunk)
 
-        
     def handle_audio_chunk(self):
         if len(self.audio_record_chunks) == 0:
             return
@@ -245,18 +273,33 @@ class AudioStreamListener:
                         self.audio_buffer.clear()
                         self.silence_blocks = 0
 
+    def on_mic_switch(self, _data=None):
+        """由事件总线 MIC_SWITCH 触发：翻转麦克风暂停状态。"""
+        self.mic_paused = not self.mic_paused
+        if self.mic_paused:
+            # 清空残留，避免恢复后把暂停前的音频当成新语音
+            self.audio_record_chunks.clear()
+            self.ring_buffer.clear()
+            self.audio_buffer.clear()
+            self.is_speaking = False
+            self.speech_blocks = 0
+            self.silence_blocks = 0
+            self.to_send_last_audio_chunk = False
+            print("🎙️ 麦克风已暂停（静音）")
+        else:
+            print("🎙️ 麦克风已恢复（收音中）")
 
     def auto_record(self):
         try:
             while True:
                 self.handle_audio_chunk()
 
-                duration = len(self.audio_buffer) / FS      
-                                
+                duration = len(self.audio_buffer) / FS
+
                 if duration < 0.25 and not self.to_send_last_audio_chunk:
                     time.sleep(0.01)
                     continue
-            
+
                 # print(f"duration:{duration}, isDone:{self.to_send_last_audio_chunk}")
                 try:
                     audio_np = np.array(self.audio_buffer, dtype=np.float32)

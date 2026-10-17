@@ -1,0 +1,6 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "momo": "./test_langGraph.py:graph"
+  }
+}

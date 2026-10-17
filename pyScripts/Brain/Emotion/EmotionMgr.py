@@ -33,5 +33,12 @@ def emotion_update():
         last_update_time = time.time()
         emotionMgr.update()
 
-
 emotionMgr.add_emotion(emotion=MomoEmotion())
+
+
+def _emotion_loop():
+    while True:
+        emotion_update()
+        time.sleep(10)
+
+threading.Thread(target = _emotion_loop, daemon = True).start()

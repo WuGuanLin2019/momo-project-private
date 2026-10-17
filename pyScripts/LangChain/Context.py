@@ -4,8 +4,6 @@ from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnableSerializable, RunnableWithMessageHistory
 
-from LangChain.OutputParser import get_output_parser
-
 cache = {}
 
 identify_prompt = """
@@ -25,31 +23,50 @@ feature_prompt = """
 """
 
 system_prompt = f"""
-【身份信息】
+<身份信息>
 {identify_prompt}
+</身份信息>
 
-【价值观】
+<价值观>
 {value_prompt}
+</价值观>
 
-【特征】
+<特征>
 {feature_prompt}
+</特征>
 
-【日常对话规则】
+<日常对话规则>
 - 使用普通话。
 - 通常只回复1~3句话。回复必须少于100个中文字符。
+- 读特定拼音时，要用特定格式：字[拼音]。如“这个字应该读长[chang2]而不是长[zhang3]”。
+</日常对话规则>
     """
 
+current_system_prompt = system_prompt
+def get_system_prompt():
+    return current_system_prompt
+
 internal_system_prompt = f"""
-【身份信息】
+<身份信息>
 {identify_prompt}
+</身份信息>
 
-【价值观】
+<价值观>
 {value_prompt}
+</价值观>
 
-【特征】
+<特征>
 {feature_prompt}
+</特征>
+
+<任务目标>
+之后会一直给你提供之前最近几轮的对话记录。你需要根据当前拥有的上下文（包括身份，价值观，特征，当前的情绪）来判断：
+是否需要改变当前的情绪，没有变化则不需要调用该tool。
+是否需要记下记忆，不要太频繁，之前记录过的不要重复记录。
+</任务目标>
 
 你正在进行内部状态处理，不需要直接回复用户。
+注意！！生成的文字要在50个中文字符以下。
     """
 
 
@@ -62,7 +79,8 @@ def get_internal_prompt():
                 "human",
                 """{analysis_messages}
 以上是之前最近几轮的对话记录。根据当前你拥有的上下文（包括身份，价值观，特征，当前的情绪）来判断：
-是否需要改变当前的情绪。
+是否需要改变当前的情绪，没有变化则不需要调用该tool，有则调用emotion_delta工具。
+是否需要记下记忆，不要太频繁，之前记录过的不要重复记录。
 """,
             ),
         ],

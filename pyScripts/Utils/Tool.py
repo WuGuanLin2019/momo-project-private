@@ -1,4 +1,5 @@
 import queue
+from typing import Any
 import soundfile as sf
 import numpy as np
 
@@ -8,6 +9,19 @@ def clearQueue(q):
             q.get_nowait()
     except queue.Empty:
         pass
+
+def remove_from_queue(q: queue.Queue[Any], predicate):
+    """删除队列中满足 predicate 的所有元素"""
+    kept = []
+    while True:
+        try:
+            item = q.get_nowait()
+        except queue.Empty:
+            break
+        if not predicate(item):
+            kept.append(item)
+    for item in kept:
+        q.put(item)
 
 def getAudioFloatFromWav(path):
         # 读取 WAV 文件，soundfile 会自动处理格式和采样率

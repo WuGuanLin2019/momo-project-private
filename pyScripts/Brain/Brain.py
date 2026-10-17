@@ -1,41 +1,36 @@
 
-from queue import Empty, Queue
-from Brain.Emotion.EmotionMgr import emotion_update
+from queue import Empty
+import threading
+from Core.Input.InputDataMgr import InputDataMgr, InputSource
+from Express.SpeakDataMgr import SpeakDataMgr, SpeakTask, SpeakTaskType
 from LangChain.Generate import think
-from Core.State import GenerationState, SpeakTask
-from Brain.conversation import add_to_conversation, get_full_conversation,input_data
+from Core.State import GenerationState
 
 
-def brain_loop(input_text_queue:Queue, to_speak_queue:Queue, pipelineState: GenerationState):
+def brain_loop(input_data_mgr:InputDataMgr, speak_data_mgr:SpeakDataMgr, pipelineState: GenerationState,event_is_talking:threading.Event):
+
     generate_state = GenerationState()
 
-    def add_to_speak_queue(str:str):
+    respone_type_map = {
+        InputSource.BulletChat:SpeakTaskType.bulletChatRespone,
+        InputSource.ReadBook:SpeakTaskType.reading_thought,
+    }
+
+    def add_to_speak_queue(str:str, is_end:bool = False, is_head:bool = False, input_source:InputSource = InputSource.Normal ):
         if str.strip() != "":
-            task = SpeakTask(generate_state.generation,str)
-            to_speak_queue.put(task)
-
-    def add_to_input_queue(data:input_data):
-        if data.content.strip() != "":
-            input_text_queue.put(data)
-
+            speak_source = respone_type_map.get(input_source, SpeakTaskType.normal)
+            task = SpeakTask(generate_state.generation,str, is_tail = is_end, is_head = is_head, taskType = speak_source)
+            speak_data_mgr.add_data(task)
+            return task
 
     while True:
-        emotion_update()
-
         try:
-            inputData = input_text_queue.get(timeout = 1)
+            #阻塞
+            inputData = input_data_mgr.get_data()
         except Empty:
-            print(".",end="")
+            print("inputData 是空")
             continue
 
-        if not inputData:
-            continue
         pipelineState.update_newest_generation(generate_state)
-
-        add_to_conversation(inputData)
-        
-        # input_str = get_full_conversation()
-        # think(input_str, add_to_speak_queue,add_to_input_queue, generate_state, pipelineState)
-        
-        think(inputData.content, add_to_speak_queue, generate_state, pipelineState)
+        think(inputData,input_data_mgr, add_to_speak_queue, generate_state, pipelineState,event_is_talking)
 

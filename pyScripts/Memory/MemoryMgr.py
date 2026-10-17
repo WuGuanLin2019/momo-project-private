@@ -37,6 +37,9 @@ class MemoryMgr:
     def __addRecallDic(self,uid:int,mid:str):
         self.recallDic[mid] = uid
 
+    def get_tool(self):
+        pass
+
     def note(self, mData:MemoryData):
         content = mData.content
         summary = mData.summary

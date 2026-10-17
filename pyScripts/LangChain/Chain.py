@@ -1,3 +1,6 @@
+from queue import Queue
+from threading import Thread
+import threading
 from typing import Any, TypeAlias
 from langchain_core.runnables import RunnableSerializable
 from LangChain.LLM import LLMMgr
@@ -34,7 +37,7 @@ def _init_momo_internal_chain():
     chain = prompts_with_history(chain)
     chainMgr.add_chain("momo_internal", chain)
 
-_init_momo_internal_chain()
+# _init_momo_internal_chain()
 
 def _init_momo_internal_test_chain():
     prompts = get_internal_prompt()
@@ -45,8 +48,7 @@ def _init_momo_internal_test_chain():
     chain = prompts_with_history(chain)
     chainMgr.add_chain("momo_internal_test", chain)
 
-_init_momo_internal_test_chain()
-
+# _init_momo_internal_test_chain()
 
 
 # if __name__ == "__main__":
