@@ -286,6 +286,11 @@ class ReadingMgr:
             eventDispatch.dispatch(ExpressEvent.trigger_vtube_hot_key, "思考")
 
     def _on_reading_tts_end(self):
+        #todo 观众较少时启动，每一句都回复一下
+        new_input_flag = drawBridgeNeedle.needle("_receive_current_bullet_chat")
+        if new_input_flag:
+            return
+
         if self.state.AllowComment():
             self.state.SetState(speech=SpeechState.Finish)
             self._advance_if_ready()
@@ -304,7 +309,7 @@ class ReadingMgr:
             eventDispatch.dispatch(BulletChatEvent.start_listening)
             return
 
-        new_input_flag = drawBridgeNeedle.needle("get_new_input_after_reading_thought")
+        new_input_flag = drawBridgeNeedle.needle("_receive_current_bullet_chat")
         if new_input_flag:
             return
 
@@ -319,7 +324,7 @@ class ReadingMgr:
     def _on_react_tts_end(self,task):
         self.state.SetState(react=ReactionState.Finish)
 
-        new_input_flag = drawBridgeNeedle.needle("get_new_input_after_reading_thought")
+        new_input_flag = drawBridgeNeedle.needle("_receive_current_bullet_chat")
         if not new_input_flag:
             # 主动停顿一下
             time.sleep(0.5)

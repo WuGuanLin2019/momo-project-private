@@ -17,7 +17,7 @@ class DrawBridgeNeedle:
         return fn(*args)
 
 
-def _get_new_input_after_reading_thought():
+def _receive_current_bullet_chat():
     from DrawBridge.BulletChat.BulletChatEvent import BulletChatEvent
     from DrawBridge.BulletChat.BulletChatMgr import bullet_chat_mgr
     if bullet_chat_mgr.has_new_data:
@@ -26,7 +26,7 @@ def _get_new_input_after_reading_thought():
     return False
 
 config: dict[str, Callable[..., Any]] = {
-    "get_new_input_after_reading_thought": _get_new_input_after_reading_thought,
+    "_receive_current_bullet_chat": _receive_current_bullet_chat,
 }
 
 drawBridgeNeedle = DrawBridgeNeedle(config)

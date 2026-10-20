@@ -1,0 +1,13 @@
+{
+  "name": "momo-subtitle-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "momo_subtitle 无边框透明浮窗：Electron 包装 third_party/Submit/sub.html",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}

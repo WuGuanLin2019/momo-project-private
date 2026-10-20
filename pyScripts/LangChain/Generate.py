@@ -89,6 +89,7 @@ def _agent_stream(inputData: InputData, input_data_mgr:InputDataMgr, check_is_cu
 
                 #tool打印
                 if message_chunk.tool_calls:
+                    is_answering = True
                     for tool_call in message_chunk.tool_calls:
                         tool_name = tool_call["name"]
                         tool_args = tool_call["args"]
@@ -174,6 +175,7 @@ def think(
 
     # 本轮回答生成
     _agent_stream(inputData,input_data_mgr, check_is_current_generation, add_to_speak_queue,event_is_talking)
+    
 
     # 派发任务：回答后内心活动，包括情绪变化和记忆改动
     _after_response()

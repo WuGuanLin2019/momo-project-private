@@ -12,6 +12,7 @@ from Utils.EventDispatch import eventDispatch
 
 clients_list: dict[str, WebSocket] = {}
 
+
 async def _send_message(unique_name: str, data: dict[str, Any]):
     if unique_name not in clients_list:
         print(unique_name + "连接不存在")
@@ -25,17 +26,16 @@ async def _send_message(unique_name: str, data: dict[str, Any]):
         clients_list.pop(unique_name)
 
 
-def send_message(unique_name: str, data: dict[str, Any],is_sync:bool=False):
+def send_message(unique_name: str, data: dict[str, Any], is_sync: bool = False):
     if event_loop is None:
         print("DrawBridge Server event loop 不存在")
         return
 
     future = asyncio.run_coroutine_threadsafe(
-        _send_message(unique_name, data),
-        event_loop
+        _send_message(unique_name, data), event_loop
     )
     if is_sync:
-         future.result()
+        future.result()
 
 
 async def test_input():
@@ -46,27 +46,27 @@ async def test_input():
         ch = await asyncio.to_thread(msvcrt.getwch)
         if ch == " ":  # 空格
             pass
-            # await send_message(
+            # send_message(
             #     "momo_subtitle",
             #     {"action": "display", "text": "我知道你的可能不会的", "duration": 5},
             # )
             # await asyncio.to_thread(
-            # send_message_sync,
-            # "momo_subtitle",
-            # {
-            #     "action": "display",
-            #     "text": "10秒到了！",
-            #     "duration": 5
-            # }
-    # )
+            #     send_message_sync,
+            #     "momo_subtitle",
+            #     {
+            #         "action": "display",
+            #         "text": "10秒到了！",
+            #         "duration": 5
+            #     }
+            # )
 
 
+event_loop: asyncio.AbstractEventLoop | None = None
 
-event_loop: asyncio.AbstractEventLoop|None = None
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    global event_loop 
+    global event_loop
     event_loop = asyncio.get_running_loop()
 
     # task = asyncio.create_task(test_input())

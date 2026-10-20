@@ -1,3 +1,4 @@
+import logging
 import websocket
 import json
 import uuid
@@ -14,6 +15,7 @@ VTUBE_WS_URL = "ws://127.0.0.1:8001"
 PLUGIN_NAME = "Momo"
 PLUGIN_DEVELOPER = "W_____u"
 FRAME_RATE = 30  # 每秒更新嘴型次数
+RECONNECT_INTERVAL = 3  # 连接失败/断开后的重连间隔（秒）
 
 
 class VTubeClient:
@@ -21,21 +23,47 @@ class VTubeClient:
         self.ws = None
         self.token = None
         self.connected = False
+        self._stop = False
+        self._send_lock = threading.Lock()
 
     def start(self):
-        self._connect()
+        self._stop = False
+        threading.Thread(target=self._connection_loop, daemon=True).start()
 
-        # threading.Thread(target=self.reconnect_loop, daemon=True).start()
+    def stop(self):
+        self._stop = True
 
-    def _connect(self):
-        self.ws = websocket.WebSocketApp(
-            VTUBE_WS_URL,
-            on_open=self.on_open,
-            on_message=self.on_message,
-            on_error=self.on_error,
-            on_close=self.on_close,
-        )
-        threading.Thread(target=self.ws.run_forever, daemon=True).start()
+    def _connection_loop(self):
+        """重连循环：任意时刻只有一个线程阻塞在 run_forever 里。
+        VTube Studio 未打开时，run_forever 在首次连接失败后会返回，
+        之后每隔 RECONNECT_INTERVAL 秒用全新的 WebSocketApp 重试；
+        VTube Studio 打开后，下一轮即可连上并完成认证。
+        """
+        while not self._stop:
+            ws = websocket.WebSocketApp(
+                VTUBE_WS_URL,
+                on_open=self.on_open,
+                on_message=self.on_message,
+                on_error=self.on_error,
+                on_close=self.on_close,
+            )
+            self.ws = ws
+            self.connected = False
+            print("尝试连接VTube Studio...")
+            try:
+                # 阻塞直到：连接成功后被断开，或首次连接失败
+                # （websocket-client 内部走完 on_error/on_close 后返回）
+                ws.run_forever()
+            except Exception as e:
+                logging.info(f"[VTubeClient] 连接异常: {e}")
+            finally:
+                # 只清理自己创建的连接，避免旧线程回调误伤新连接
+                if self.ws is ws:
+                    self.ws = None
+                    self.connected = False
+            if self._stop:
+                break
+            time.sleep(RECONNECT_INTERVAL)
 
     def send_request(self, messageType, data):
         """发送到 VTube Studio"""
@@ -46,10 +74,20 @@ class VTubeClient:
             "messageType": messageType,
             "data": data,
         }
-        try:
-            self.ws.send(json.dumps(request))
-        except Exception as e:
-            print(f"[VTubeClient] 发送请求失败: {e}")
+        with self._send_lock:
+            ws = self.ws
+            if ws is None:
+                return False
+            try:
+                ws.send(json.dumps(request))
+                return True
+            except Exception as e:
+                print(f"[VTubeClient] 发送请求失败: {e}")
+                # 连接已失效：立即作废，让重连线程下一轮重建连接
+                if ws is self.ws:
+                    self.ws = None
+                    self.connected = False
+                return False
 
     def request_token(self):
         self.send_request(
@@ -114,14 +152,12 @@ class VTubeClient:
             else:
                 print("❌ 认证失败")
 
-    def on_error(self, error):
+    def on_error(self, ws, error):
         self.connected = False
-        self.ws = None
         print("❌ WebSocket 错误:", error)
 
-    def on_close(self, code, msg):
+    def on_close(self, ws, code, msg):
         self.connected = False
-        self.ws = None
         print("🔒 WebSocket 已关闭", code, msg)
 
     # ----------------------------
@@ -190,18 +226,8 @@ class VTubeClient:
         self.send_mouth_param(0)
         return True
 
-    def reconnect_loop(self):
-        while True:
-            time.sleep(3)
-            if self.connected:
-                continue
-
-            if not self.ws:
-                print("尝试连接VTube Studio...")
-                self._connect()
-            else:
-                try:
-                    self.request_token()
-                except Exception as e:
-                    print(e)
-                    self.ws = None
+# if __name__ == "__main__":
+#     client = VTubeClient()
+#     client.start()
+#     while True:
+#         time.sleep(1)

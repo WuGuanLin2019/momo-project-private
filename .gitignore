@@ -16,6 +16,7 @@ env/
 *.db-wal
 *.db-shm
 *.sqlite3
+pyScripts/Data/Conversation/
 
 # ===== 临时文件与调试输出 =====
 Temp/
@@ -43,6 +44,10 @@ desktop.ini
 
 # ===== 公开展示仓暂存目录 =====
 showcase/
+
+# ===== Node（Electron 桌面字幕）=====
+third_party/Submit/desktop/node_modules/
+third_party/Submit/desktop/dist/
 
 # ===== 第三方依赖（不随仓库分发，见 third_party/README.md）=====
 # 纳入跟踪的自研代码：

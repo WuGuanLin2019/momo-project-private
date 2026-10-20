@@ -75,9 +75,6 @@ def playVoice(audio_data, sample_rate):
 
     audio_data = np.clip(audio_data, -1.0, 1.0)
 
-    # 音量归一化
-    audio_data = _normalize_audio(audio_data)
-
     if audio_data.dtype != np.int16:
         audio_data = (audio_data * 32767).astype(np.int16)
 

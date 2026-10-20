@@ -10,6 +10,10 @@
             width: 100%;
             height: 100%;
             background: transparent;
+            /* 浮窗/浏览器源都不允许滚动：字幕或调试浮层内容超出窗口时直接裁掉
+               （调试浮层最新一条在顶部，裁掉的正好是最旧的行），
+               否则文档溢出会出现页面滚动条 */
+            overflow: hidden;
         }
 
         #subtitle {
@@ -18,14 +22,69 @@
             width: 100%;
             text-align: left;
 
-            color: white;
-            font-size: 52px;
+            color: rgb(141, 97, 194);
+            font-size: 48px;
             font-family: "Source Han", sans-serif;
             font-weight: bold;
 
             text-shadow:
-                2px 2px 5px black,
-                -2px -2px 5px black;
+                1px 1px 5px rgb(239, 214, 243),
+                -1px -1px 5px rgb(239, 203, 248);
+        }
+
+        /* 调试浮层：把浏览器源内部的 console 日志显示出来，
+           方便在没有 DevTools 的直播姬里排查断线/收字幕问题。
+           调试完可把下面这行 display:none; 取消注释隐藏。 */
+        #debug {
+            position: absolute;
+            top: 0;
+            left: 0;
+            max-width: 100%;
+            color: #5dff7a;
+            font-size: 13px;
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.55);
+            padding: 4px 6px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            z-index: 999;
+            /* 想隐藏调试浮层：取消下面这行的注释即可。 */
+            display: none; 
+        }
+        /* Electron 浮窗模式（desktop/main.js）：关掉点击穿透后，
+           拖动这块调试浮层即可移动窗口。普通浏览器会忽略该属性。 */
+        #debug {
+            -webkit-app-region: drag;
+        }
+
+        /* 编辑模式：Ctrl+Alt+S 关掉点击穿透时，由 main.js 给 body 加 drag-mode，
+           显示窗口边界和拖动把手，让"可拖动的范围"可见。
+           直播姬浏览器源不会加这个类，不受影响。 */
+        body.drag-mode {
+            border: 2px dashed rgba(255, 255, 255, 0.55);
+            box-sizing: border-box;
+            -webkit-app-region: drag; /* 编辑模式下整个窗口可抓取拖动 */
+        }
+
+        #drag-handle {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 5px 16px;
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.75);
+            color: #ffffff;
+            font-size: 13px;
+            font-family: "Microsoft YaHei", sans-serif;
+            white-space: nowrap;
+            -webkit-app-region: drag;
+            z-index: 1000;
+        }
+
+        body.drag-mode #drag-handle {
+            display: block;
         }
     </style>
 </head>
@@ -35,6 +94,8 @@
 <div id="subtitle">
     =w=
 </div>
+<div id="debug"></div>
+<div id="drag-handle">&#8801; 拖动此处移动窗口 &#183; Ctrl+Alt+S 恢复穿透</div>
 <script src = "momo_subtitle.js"></script>
 </body>
 </html>

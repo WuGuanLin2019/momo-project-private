@@ -8,11 +8,16 @@ from Brain import loop as brain_loop
 from Express import loop as express_loop
 from DrawBridge import DrawBridgeServer
 from Debug import DebugSender
+from Memory.DataHandler.ConversationSave import conversation_saver
 
 
 class AssistantPipeline:
     def __init__(self):
         DebugSender.start_debug_sender()
+
+        # 对话原始数据保存器：注册 after_content_respone 事件，随 brain 线程每轮对话结束后落盘
+        # （DebugSender 也会 import 本单例，模块级只构造一次，不会重复注册）
+        self.conversation_saver = conversation_saver
 
         # 主线程创建所有队列，成为唯一的数据流管理者
         self.input_data_mgr = InputDataMgr()# listen -> think

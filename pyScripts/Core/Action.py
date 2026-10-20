@@ -210,7 +210,6 @@ _mem0_tools = {t.name: t for t in mem0_mgr.tools}
 def play_VTB_motion(motion:str):
     """
     当你想表达情绪时，可以调用此接口。
-    不要每轮都调，至少间隔 3 轮。
 
     Args:
     motion(str):只能在固定的枚举里选择（点头|摇头）,

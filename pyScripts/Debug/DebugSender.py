@@ -3,7 +3,9 @@
 数据流：
 
     LangGraph checkpointer 中的 state
-        -> build_context_snapshot()            取当前 state 并序列化成 JSON 安全的结构
+        -> build_context_snapshot()   取当前 state 并序列化成 JSON 安全的结构
+                                   （实现位于 Memory/DataHandler/ConversationSave.py，
+                                     与对话保存器共用，保证调试页与落盘内容同源）
         -> DrawBridgeServer.send_message_sync()       经 WebSocket 发给已注册的客户端
         -> debugViewer.html 渲染
 
@@ -29,14 +31,13 @@
 
 from __future__ import annotations
 
-import json
 import threading
-import time
 from typing import Any
 
 from LangChain.Agent import MOMO_AGENT_NAME, agentMgr
 from DrawBridge import DrawBridgeServer
 from DrawBridge.DrawBridgeEvent import DrawBridgeEvent
+from Memory.DataHandler.ConversationSave import build_context_snapshot
 from Utils.EventDispatch import eventDispatch
 
 # 调试页面在 DrawBridgeServer 里注册的 unique_name，必须与 debugViewer.html 保持一致
@@ -72,233 +73,6 @@ def switch_debug_target(agent_name: str, thread_id: str | None = None) -> tuple[
 def _get_target() -> tuple[str, str]:
     with _target_lock:
         return _target
-
-
-def _json_safe(value: Any) -> Any:
-    """把不可 JSON 序列化的值降级为可读字符串。
-
-    这一步是必要的：ws.send_json 一旦失败会被 DrawBridgeServer 当作断连并踢掉客户端，
-    任何孤立的非序列化字段（如某些厂商返回的 usage 对象）都会让调试页面掉线。
-    """
-    try:
-        # 返回值无关紧要，这里只是借它做「能否序列化」的探测
-        _ = json.dumps(value)
-    except (TypeError, ValueError):
-        if isinstance(value, dict):
-            return {str(k): _json_safe(v) for k, v in value.items()}
-        if isinstance(value, (list, tuple, set)):
-            return [_json_safe(v) for v in value]
-        return repr(value)
-    return value
-
-
-def _content_to_str(content: Any) -> str:
-    """LangChain 的 content 既可能是 str，也可能是多模态的 list[dict]。"""
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts: list[str] = []
-        for block in content:
-            if isinstance(block, str):
-                parts.append(block)
-            elif isinstance(block, dict):
-                # 思考过程由 _extract_thinking 单独提取展示，正文里跳过：
-                # 否则会被下面那行降级成 "[reasoning]" 占位符，等于把思考内容丢了
-                if block.get("type") in ("reasoning", "thinking"):
-                    continue
-                if isinstance(block.get("text"), str):
-                    parts.append(block["text"])
-                else:
-                    parts.append(f"[{block.get('type', 'unknown')}]")
-        return "".join(parts)
-    return str(content)
-
-
-def _extract_thinking(msg: Any) -> str:
-    """提取模型返回的思考过程。各家存放位置不统一，这里做兼容。
-
-    - additional_kwargs["reasoning_content"]：DeepSeek / Ollama / XAI / Groq
-      （langchain_core.messages.base._extract_reasoning_from_additional_kwargs
-      读的也是这个字段，见 chat_models.py:316 的写入处）
-    - content 中的 reasoning / thinking block：Gemini / Anthropic，经 block
-      translator 归一后形如 {"type": "reasoning", "reasoning": "..."}
-    - additional_kwargs["reasoning"]：OpenAI Responses API 风格
-    """
-    found: list[str] = []
-
-    def _add(value: Any) -> None:
-        if isinstance(value, str) and value:
-            found.append(value)
-        elif isinstance(value, list):
-            for item in value:
-                if isinstance(item, str) and item:
-                    found.append(item)
-
-    kwargs = getattr(msg, "additional_kwargs", None)
-    if isinstance(kwargs, dict):
-        _add(kwargs.get("reasoning_content"))
-
-        reasoning = kwargs.get("reasoning")
-        if isinstance(reasoning, dict):
-            # OpenAI Responses 风格：正文在 text，压缩摘要在 summary[].text
-            _add(reasoning.get("text"))
-            summary = reasoning.get("summary")
-            if isinstance(summary, list):
-                for s in summary:
-                    if isinstance(s, dict):
-                        _add(s.get("text"))
-        else:
-            _add(reasoning)
-
-    content = getattr(msg, "content", None)
-    if isinstance(content, list):
-        for block in content:
-            if not isinstance(block, dict):
-                continue
-            btype = block.get("type")
-            if btype == "reasoning":
-                _add(block.get("reasoning"))
-            elif btype == "thinking":
-                _add(block.get("thinking") or block.get("text"))
-
-    # 去重保序：同一份思考可能同时出现在 additional_kwargs 和 content 里
-    seen: set[str] = set()
-    uniq: list[str] = []
-    for t in found:
-        if t not in seen:
-            seen.add(t)
-            uniq.append(t)
-
-    return "\n".join(uniq)
-
-
-def _message_to_dict(msg: Any) -> dict[str, Any]:
-    """把任意 LangChain message 转成前端可直接渲染的 dict。"""
-    data: dict[str, Any] = {
-        "id": getattr(msg, "id", None),
-        "role": getattr(msg, "type", None),
-        "class": type(msg).__name__,
-        "content": _content_to_str(getattr(msg, "content", "")),
-    }
-
-    thinking = _extract_thinking(msg)
-    if thinking:
-        data["thinking"] = thinking
-
-    tool_calls = getattr(msg, "tool_calls", None)
-    if tool_calls:
-        data["tool_calls"] = [
-            {
-                "name": tc.get("name"),
-                "args": tc.get("args"),
-                "id": tc.get("id"),
-            }
-            for tc in tool_calls
-            if isinstance(tc, dict)
-        ]
-
-    tool_call_id = getattr(msg, "tool_call_id", None)
-    if tool_call_id:
-        data["tool_call_id"] = tool_call_id
-
-    usage = getattr(msg, "usage_metadata", None)
-    if usage:
-        data["usage"] = _json_safe(usage)
-
-    return _json_safe(data)
-
-
-def _get_system_prompt(agent_name: str) -> str:
-    """取该 agent 当前生效的 system prompt。
-
-    system prompt 不在 state 里，所以只能从源头读：MomoSystemPromptMiddleware 是
-    用 request.override(system_message=...) 在每次模型调用前动态注入的，这个覆盖只
-    存在于传给模型的 ModelRequest 上，checkpointer 落地的 state 中不会留下
-    SystemMessage。这里读的正是该中间件自己拼接时用的那个 PromptPiecer
-    （Agent.py:268），拿到的就是此刻实际会发给模型的文本。
-
-    注意这是「此刻」的快照，而非历史上某次请求真正发出的那份——prompt 被中途
-    add/remove 过的话，两者会有差异。
-    """
-    ins = agentMgr.get_agent_ins(agent_name)
-    if ins is None:
-        return ""
-
-    piecer = getattr(ins, "promptPiecer", None)
-    if piecer is None:
-        return ""
-
-    try:
-        return piecer.get_full_text() or ""
-    except Exception as e:
-        print(f"[DebugSender] 读取 {agent_name} 的 system prompt 失败: {e}")
-        return ""
-
-
-def build_context_snapshot(agent_name: str, thread_id: str) -> dict[str, Any] | None:
-    """读取某个 agent 在某个会话 thread 下的当前上下文。
-
-    只有 agent 本身不存在才返回 None。agent 存在但该 thread 还没跑过
-    （checkpointer 里没有 checkpoint）时要返回「空帧」而不是 None：否则前端
-    切到一个尚未产生会话的 agent 会因为一帧都收不到而停在原画面上，看上去
-    就是切换没生效。
-    """
-    agent = agentMgr.get_agent(agent_name)
-    if agent is None:
-        return None
-
-    values: dict[str, Any] = {}
-    try:
-        state = agent.get_state({"configurable": {"thread_id": thread_id}})
-        if state and state.values:
-            values = state.values
-    except Exception as e:
-        print(f"[DebugSender] 读取 {agent_name}/{thread_id} 状态失败: {e}")
-
-    system_prompt = _get_system_prompt(agent_name)
-
-    raw_messages = values.get("messages", [])
-    messages = [_message_to_dict(m) for m in raw_messages if hasattr(m, "type")]
-
-    # messages 之外的自定义 channel（如中间件写入的字段），同样展示出来便于排查
-    extras: dict[str, Any] = {}
-    for key, value in values.items():
-        if key == "messages":
-            continue
-        extras[key] = _json_safe(value)
-
-    last = messages[-1] if messages else None
-    # 签名里带上末条消息的内容长度，这样「同一条消息正在流式增长」也能被感知。
-    # 再带上 system prompt 的哈希：否则 prompt 被动态增删（如 ReadingMgr）而消息
-    # 没变时，这一帧会被判定为「无变化」而不推送。hash 只在同进程内稳定，
-    # 这里仅用于本进程内的变化检测，够用。
-    prompt_hash = hash(system_prompt)
-    # 带上目标本身：_last_signature 是所有会话共用的一个变量，不带上 agent/thread
-    # 的话，A 会话的签名会被拿去和 B 会话比，切换目标时必然被误判成「有变化」。
-    scope = f"{agent_name}/{thread_id}"
-    signature = (
-        f"{scope}|{len(messages)}|{last['id']}|{last['role']}|{len(last['content'])}|{prompt_hash}"
-        if last
-        else f"{scope}|{len(messages)}|empty|{prompt_hash}"
-    )
-
-    total_tokens = 0
-    for m in messages:
-        usage = m.get("usage")
-        if isinstance(usage, dict):
-            total_tokens += int(usage.get("total_tokens") or 0)
-
-    return {
-        "agent_name": agent_name,
-        "thread_id": thread_id,
-        "system_prompt": system_prompt,
-        "messages": messages,
-        "extras": extras,
-        "message_count": len(messages),
-        "total_tokens": total_tokens,
-        "signature": signature,
-        "timestamp": time.time(),
-    }
 
 
 def send_context(agent_name: str, thread_id: str, *, force: bool = False) -> bool:

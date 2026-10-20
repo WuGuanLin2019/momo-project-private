@@ -57,7 +57,7 @@ class SentenceHandler:
 
             self.current_sentence += str(text)
 
-            if (is_cut and len(self.current_sentence)>=3 ) or isDone:
+            if (is_cut and len(self.current_sentence)>=10 ) or isDone:
                 output = self.current_sentence
                 self.content += self.current_sentence
                 self.current_sentence = ""

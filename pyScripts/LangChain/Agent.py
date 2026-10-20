@@ -34,6 +34,7 @@ from Core.Action import (
     get_all_tools_for_agent,
 )
 from LangChain.AgentMeta import AgentMetaContext
+from LangChain.SummarizationArchive import ArchivingSummarizationMiddleware
 
 
 Agent: TypeAlias = CompiledStateGraph[
@@ -273,7 +274,7 @@ class MomoDynamicToolMiddleware(AgentMiddleware[AgentState[Any], ContextT, Any])
             return await handler(request.override(tools=tools))
         return await handler(request)
 
-
+#todo 这些变量整理出config.py/ yaml
 MOMO_INTERNAL_AGENT_NAME = "momo_internal"
 MOMO_AGENT_NAME = "momo"
 MomoPromptPiecer = PromptPiecer()
@@ -296,7 +297,8 @@ agentMgr.add_agent_ins(
             MomoSystemPromptMiddleware(MOMO_AGENT_NAME),
             MomoDynamicToolMiddleware(MOMO_AGENT_NAME),
             MomoStateMiddleware(MOMO_AGENT_NAME),
-            SummarizationMiddleware(
+            ArchivingSummarizationMiddleware(
+                MOMO_AGENT_NAME,
                 model=LLMMgr.get_llm("summary"),
                 trigger=("tokens", 10000),
                 keep=("tokens", 4000),
@@ -369,7 +371,8 @@ agentMgr.add_agent_ins(
         system_prompt=temPromptPiecer.get_full_text(),
         middleware=[
             MomoInternalContextEditorMiddleware,
-            SummarizationMiddleware(
+            ArchivingSummarizationMiddleware(
+                MOMO_INTERNAL_AGENT_NAME,
                 model=LLMMgr.get_llm("summary"),
                 trigger=("messages", 35),
                 keep=("messages", 10),
