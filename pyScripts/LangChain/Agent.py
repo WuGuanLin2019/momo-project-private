@@ -48,7 +48,7 @@ class AgentIns:
     agent: Agent
     promptPiecer: PromptPiecer = PromptPiecer()
     toolPiecer: ToolPiecer = ToolPiecer()
-    agentStatusPiecer: AgentStatusPiecer | None = None
+    agentStatusPiecer: AgentStatusPiecer = AgentStatusPiecer()
 
 
 class AgentMgr:
@@ -374,7 +374,7 @@ agentMgr.add_agent_ins(
             ArchivingSummarizationMiddleware(
                 MOMO_INTERNAL_AGENT_NAME,
                 model=LLMMgr.get_llm("summary"),
-                trigger=("messages", 35),
+                trigger=("messages", 100),
                 keep=("messages", 10),
                 summary_prompt=SUMMARY_PROMPT,
             ),

@@ -41,6 +41,7 @@ def _agent_stream(inputData: InputData, input_data_mgr:InputDataMgr, check_is_cu
 
     global is_answering
     is_answering = False
+    empty_content_flag = True
 
     anim_timer = threading.Timer(2, function = _handle_anim,args = [event_is_talking])
     anim_timer.daemon = True
@@ -109,6 +110,7 @@ def _agent_stream(inputData: InputData, input_data_mgr:InputDataMgr, check_is_cu
                 print(content, end="", flush=True)
                 if content:
                     is_answering = True
+                    empty_content_flag = False
 
                 #todo 中断时可能会在tool_call和tool_message之间，需要处理（注意一条消息多个工具调用）
                 if not check_is_current_generation():
@@ -151,7 +153,9 @@ def _agent_stream(inputData: InputData, input_data_mgr:InputDataMgr, check_is_cu
             current_speak_task.is_tail = True
 
     if not is_answering:
-        eventDispatch.dispatch(BrainEvent.on_empty_content_respone,inputData.source)
+        eventDispatch.dispatch(BrainEvent.on_empty_content_and_tool,inputData.source)
+    if empty_content_flag:
+        eventDispatch.dispatch(BrainEvent.on_empty_content,inputData.source)
 
 
 def _after_response():

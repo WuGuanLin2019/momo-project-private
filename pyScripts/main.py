@@ -31,11 +31,12 @@ def switch_mic():
     from Listener.ListenEvent import ListenEvent
     eventDispatch.dispatch(event=ListenEvent.mic_switch)
 
-def listen_bullet_chat():
+def switch_bullet_chat():
     from DrawBridge.BulletChat.BulletChatMgr import bullet_chat_mgr
-    print("开启弹幕")
+    bullet_chat_mgr.switch_listening()
 
-import msvcrt
+
+import msvcrt 
 try:
     while True:
         ch = msvcrt.getwch()      # 阻塞等一个按键
@@ -46,7 +47,7 @@ try:
         elif ch =="m":
             switch_mic()
         elif ch =="b":
-            listen_bullet_chat()
+            switch_bullet_chat()
         # time.sleep(1)
 
 except KeyboardInterrupt:

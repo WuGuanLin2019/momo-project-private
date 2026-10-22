@@ -104,11 +104,13 @@ class ReadingMgr:
 
         @tool(return_direct=True)
         def read_next_sentence(runtime: ToolRuntime[AgentMetaContext] = _NO_RUNTIME,):
-            """以下时机调用此接口：
-                当用户明确让你继续阅读时；
-                当你觉得用户话已经表达完整了，或者后续没有继续表达的意图时。"""
-
-            if self.state.isPause:
+            """这个接口你能用来主动获得下一句原文。
+                以下时机调用此接口：
+                -当用户明确让你继续阅读时；
+                -当你觉得用户话已经表达完整了，或者后续没有继续表达的意图时。"""
+            if runtime.context.input_data.source == InputSource.BulletChat:
+                self.request_next_sentence()  
+            elif self.state.isPause:
                 # 从暂停恢复：重置状态后继续读（当前句或下一句）
                 self.state.ResetState()
                 self._continue_or_next()
@@ -127,7 +129,7 @@ class ReadingMgr:
 
             self.state.isPause = False
             eventDispatch.dispatch(BulletChatEvent.stop_listening)
-            return "等待下一句原文输入。"
+            return "已请求一下段原文片段。"
 
         @tool(return_direct=True)
         def reading_from_selected_place():
@@ -160,7 +162,7 @@ class ReadingMgr:
         @tool
         def pause_reading():
             """以下时机调用此接口：
-            当用户明确让你暂停阅读时；
+            当用户明确让你暂停阅读时，比如用户说让你“停一下”；
             当你觉得用户本轮对话还没表达完，或是感觉到用户后续有想继续表达的意图时。 """
             self.state.isPause = True
 
@@ -169,7 +171,7 @@ class ReadingMgr:
     def _on_start_read_command(self, event_is_talking: "threading.Event | None" = None):
         if event_is_talking is not None:
             self.event_is_talking = event_is_talking
-        eventDispatch.register(BrainEvent.on_empty_content_respone, self.on_empty_content_respone)
+        eventDispatch.register(BrainEvent.on_empty_content_and_tool, self.on_empty_content_respone)
         eventDispatch.register(ExpressEvent.on_tts_end, self._on_finish_tts)
         eventDispatch.register(
             DrawBridgeEvent.on_receive_message, self._on_receive_draw_bridge_message
@@ -194,16 +196,14 @@ class ReadingMgr:
         ins = agentMgr.get_agent_ins(_READING_AGENT_NAME_)
         if not ins:
             return
-
-        # 若 piecer 支持 remove，先 remove 保证幂等
+            
         ins.toolPiecer.remove(READ_KEY)
-        ins.promptPiecer.remove(READ_KEY)
         ins.toolPiecer.add(ToolData(READ_KEY, self.tools))
+        
+        ins.promptPiecer.remove(READ_KEY)
         ins.promptPiecer.add(PromptData(READ_KEY, READ_PROMPT))
 
-        if not ins.agentStatusPiecer:
-            ins.agentStatusPiecer = AgentStatusPiecer()
-        ins.agentStatusPiecer.remove(READ_KEY)
+        # ins.agentStatusPiecer.remove(READ_KEY)
         # ins.agentStatusPiecer.add(StatusData(READ_KEY, self.generate_agent_status))
 
     def _unregister_agent_hooks(self):
@@ -238,6 +238,7 @@ class ReadingMgr:
             self.focus_on_selection_result = data.get("ok") or False
 
     def request_next_sentence(self):
+        print("request_next_sentence")
         DrawBridgeServer.send_message( BRIDGE_UNIQUE, {"action": "get_next_sentence"})
 
     def request_focus_on_selected(self):
@@ -286,11 +287,6 @@ class ReadingMgr:
             eventDispatch.dispatch(ExpressEvent.trigger_vtube_hot_key, "思考")
 
     def _on_reading_tts_end(self):
-        #todo 观众较少时启动，每一句都回复一下
-        new_input_flag = drawBridgeNeedle.needle("_receive_current_bullet_chat")
-        if new_input_flag:
-            return
-
         if self.state.AllowComment():
             self.state.SetState(speech=SpeechState.Finish)
             self._advance_if_ready()
@@ -300,7 +296,11 @@ class ReadingMgr:
                 self.anim_timer.start()
         else:
             self.state.SetState(react=ReactionState.NotYet)
-            self.request_next_sentence()
+            #todo 观众较少时启动，每一句都回复一下
+            new_input_flag = drawBridgeNeedle.needle("_react_current_bullet_chat")
+            if not new_input_flag:
+                self.request_next_sentence()
+            
 
     def _on_normal_tts_end(self, task):
         #之前是暂停状态，就不顺着读下去了
@@ -309,7 +309,7 @@ class ReadingMgr:
             eventDispatch.dispatch(BulletChatEvent.start_listening)
             return
 
-        new_input_flag = drawBridgeNeedle.needle("_receive_current_bullet_chat")
+        new_input_flag = drawBridgeNeedle.needle("_react_current_bullet_chat")
         if new_input_flag:
             return
 
@@ -323,12 +323,13 @@ class ReadingMgr:
 
     def _on_react_tts_end(self,task):
         self.state.SetState(react=ReactionState.Finish)
+        self.state.ResetState()
 
-        new_input_flag = drawBridgeNeedle.needle("_receive_current_bullet_chat")
+        new_input_flag = drawBridgeNeedle.needle("_react_current_bullet_chat")
         if not new_input_flag:
             # 主动停顿一下
             time.sleep(0.5)
-            self.state.ResetState()
+            
             self.request_next_sentence()
     
 

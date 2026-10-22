@@ -17,16 +17,12 @@ class DrawBridgeNeedle:
         return fn(*args)
 
 
-def _receive_current_bullet_chat():
-    from DrawBridge.BulletChat.BulletChatEvent import BulletChatEvent
+def _react_current_bullet_chat():
     from DrawBridge.BulletChat.BulletChatMgr import bullet_chat_mgr
-    if bullet_chat_mgr.has_new_data:
-        eventDispatch.dispatch(BulletChatEvent.receive_current_bullet_chat)
-        return True
-    return False
+    return bullet_chat_mgr.push_bullet_chat_data()
 
 config: dict[str, Callable[..., Any]] = {
-    "_receive_current_bullet_chat": _receive_current_bullet_chat,
+    "_react_current_bullet_chat": _react_current_bullet_chat,
 }
 
 drawBridgeNeedle = DrawBridgeNeedle(config)

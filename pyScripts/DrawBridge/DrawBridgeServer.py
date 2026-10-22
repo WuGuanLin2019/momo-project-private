@@ -10,6 +10,9 @@ from DrawBridge.DrawBridgeEvent import DrawBridgeEvent
 from DrawBridge import DrawBridgeNeedle
 from Utils.EventDispatch import eventDispatch
 
+from DrawBridge.BulletChat import BulletChatMgr
+
+
 clients_list: dict[str, WebSocket] = {}
 
 
