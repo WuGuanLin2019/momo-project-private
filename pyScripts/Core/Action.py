@@ -212,25 +212,26 @@ def play_VTB_motion(motion:str):
     当你想表达情绪时，可以调用此接口。
 
     Args:
-    motion(str):只能在固定的枚举里选择（点头|摇头）,
+    motion(str):只能在固定的枚举里选择（点头|摇头|思考|遵命|惊讶）,
 
     使用例子：
     当遇到的观点与你已有立场一致，或你想强调某个判断时，调用 play_VTB_motion("点头")。
     当遇到的观点你反对，或你感到无奈时，调用 play_VTB_motion("摇头")。
     """
+
     hot_key_name = motion
     eventDispatch.dispatch(ExpressEvent.trigger_vtube_hot_key,hot_key_name)
     return "已播放动画"+motion
 
-Tools = [ get_now_time, emotion_delta,play_VTB_motion, learn_polyphonic] + mem0_mgr.tools
+Tools = [ get_now_time, emotion_delta,play_VTB_motion, learn_polyphonic]
 ToolsMap = {func.name: func for func in Tools}
-ToolsWithKeepMessage = []+ mem0_mgr.tools
+ToolsWithKeepMessage = []
 
 
 # remind 用 mem0 版，必须和 ToolsMap 里注册的是同一个对象，
 # 否则 LLM 按旧 schema（searchKey: list[str]）传参，实际执行的却是 mem0 版（query: str）
-MainTools = [_mem0_tools["remind"], get_now_time, play_VTB_motion,learn_polyphonic]
-InternalTools = [emotion_delta]+ mem0_mgr.tools
+MainTools = [ get_now_time, play_VTB_motion,learn_polyphonic]
+InternalTools = [emotion_delta]
 
 _tools_for_main_llm = MainTools.copy()
 

@@ -32,5 +32,5 @@ class PromptPiecer:
         self.datas.pop(key, None)
 
     def get_full_text(self):
-        ordered_datas = sorted(self.datas.values(), key=lambda d: d.priority.value, reverse=True)
+        ordered_datas = sorted(self.datas.values(), key=lambda d: d.priority.value, reverse=False)
         return "\n".join(d.text for d in ordered_datas if d.text)

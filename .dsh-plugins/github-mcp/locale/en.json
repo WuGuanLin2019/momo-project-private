@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "GitHub MCP (Read-only)",
+    "description": "Connects GitHub's official remote MCP server so the agent can search code, read issues, pull requests, and releases."
+  }
+}

@@ -427,7 +427,7 @@ class ConversationSaver:
         os.replace(tmp_path, new_path)
 
         session.file_path = new_path
-        print(f"【保存对话】{agent_name}: {os.path.basename(new_path)}")
+        # print(f"【保存对话】{agent_name}: {os.path.basename(new_path)}")
 
     def _rotate_backups(self, agent_dir: str, start_time_stamp: int) -> str:
         """备份槽位后移一格，返回 .bak.1 路径"""

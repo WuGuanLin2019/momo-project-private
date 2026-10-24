@@ -43,7 +43,7 @@ def _agent_stream(inputData: InputData, input_data_mgr:InputDataMgr, check_is_cu
     is_answering = False
     empty_content_flag = True
 
-    anim_timer = threading.Timer(2, function = _handle_anim,args = [event_is_talking])
+    anim_timer = threading.Timer(1, function = _handle_anim,args = [event_is_talking])
     anim_timer.daemon = True
     anim_timer.start()
 
@@ -179,7 +179,6 @@ def think(
 
     # 本轮回答生成
     _agent_stream(inputData,input_data_mgr, check_is_current_generation, add_to_speak_queue,event_is_talking)
-    
 
     # 派发任务：回答后内心活动，包括情绪变化和记忆改动
     _after_response()

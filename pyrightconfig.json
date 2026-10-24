@@ -1,4 +1,6 @@
 {
+  "venvPath": "E:/PythonVenv",
+  "venv": "venv",
   "executionEnvironments": [
     {
       "root": ".",

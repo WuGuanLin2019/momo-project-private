@@ -28,7 +28,7 @@ class ReadingState:
         self.focusCharCount = 0
         self.focusSentenceCount = 0
         self.focusContent = ""
-        self.allowCommentCharCount = 50
+        self.allowCommentCharCount = 150
         self.extraCommentCharCount = self.allowCommentCharCount
         self.isPageEnd = False
         self.isChapterEnd = False

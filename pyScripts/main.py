@@ -2,11 +2,13 @@ import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"   # <-- 添加这一行，必须在所有 import 之前
 
 from Core.Pipeline import AssistantPipeline
+from LangChain.MCPClient import load_mcp_tools_sync
 import sys
 import logging
 
 logging.basicConfig(level=logging.INFO)
 mainP = AssistantPipeline()
+load_mcp_tools_sync()  # 接入 MCP 工具（失败只打印日志，不阻断启动）
 mainP.start()
 
 print("Assistant running... 按 Ctrl+C 退出")

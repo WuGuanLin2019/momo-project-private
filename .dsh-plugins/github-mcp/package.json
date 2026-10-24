@@ -1,0 +1,17 @@
+{
+  "name": "@local/github-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Connects GitHub's official remote MCP server so the agent can search code, read issues, pull requests, and releases.",
+  "exports": {
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": ["cordis.patch.yml", "locale/*.json", "icon.svg"],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

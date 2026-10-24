@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "GitHub MCP（只读）",
+    "description": "接入 GitHub 官方远程 MCP 服务器，让 agent 能搜索代码、读取 issue、PR 与 release。"
+  }
+}

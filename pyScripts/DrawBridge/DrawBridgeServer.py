@@ -13,7 +13,7 @@ from Utils.EventDispatch import eventDispatch
 from DrawBridge.BulletChat import BulletChatMgr
 
 
-clients_list: dict[str, WebSocket] = {}
+clients_list: dict[str, WebSocket] = {} 
 
 
 async def _send_message(unique_name: str, data: dict[str, Any]):

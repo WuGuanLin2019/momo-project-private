@@ -1,5 +1,6 @@
 # from .Kokoro import text_to_audioData
 # from Express.Moss import tts_synthesize
+import time
 from Express.ExpressEvent import ExpressEvent
 from Express.SpeakDataMgr import SpeakTask, SpeakTaskType
 from Express.TTS_Client import request_audio_data
@@ -76,21 +77,24 @@ def send_submit_data(task: SpeakTask, duration: float):
 def _when_tts_start(data):
     task: SpeakTask = data["task"]
     duration = data["duration"]
-    if (
-        duration > 0
-        and task.text.strip() != ""
-        and task.taskType != SpeakTaskType.reading
-    ):
-        DrawBridgeServer.send_message(
-            "momo_subtitle",
-            {
-                "action": "display",
-                "text": task.text,
-                "duration": duration,
-                "is_head": task.is_head,
-                "is_tail": task.is_tail,
-            },
-        )
+    if duration > 0 and task.text.strip() != "":
+        if task.taskType != SpeakTaskType.reading:
+            DrawBridgeServer.send_message(
+                "momo_subtitle",
+                {
+                    "action": "display",
+                    "text": task.text,
+                    "duration": duration,
+                    "is_head": task.is_head,
+                    "is_tail": task.is_tail,
+                },
+            )
+        
+        if task.taskType == SpeakTaskType.bulletChatRespone and task.is_head:
+            eventDispatch.dispatch(ExpressEvent.trigger_vtube_hot_key,"看向弹幕")
+            time.sleep(0.5)
+
+            
 
 
 def _when_tts_finish(data):

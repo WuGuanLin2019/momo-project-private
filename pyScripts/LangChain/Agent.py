@@ -18,15 +18,17 @@ from langchain.agents.middleware.types import (
     AgentState,
     InputAgentState,
     OutputAgentState,
+    ToolCallRequest,
 )
 
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph.state import CompiledStateGraph, Runnable
+from langgraph.types import Command
 from Brain.Context.AgentStatusMgr import AgentStatusPiecer, StatusData, AGENT_STATUS_KEY
 from Brain.Context.PromptMgr import PromptData, PromptPiecer
 from Brain.Context.ToolMgr import ToolData, ToolPiecer
 from LangChain.LLM import LLMMgr
-from LangChain.Context import internal_system_prompt, system_prompt
+from LangChain.Context import SUMMARY_INTERNAL_PROMPT, SUMMARY_PROMPT, internal_system_prompt, system_prompt
 from Core.Action import (
     InternalTools,
     MainTools,
@@ -101,52 +103,6 @@ class AgentMgr:
 
 agentMgr = AgentMgr()
 checkpointer = InMemorySaver()
-SUMMARY_PROMPT = """ 
-你是一个对话上下文总结器。
-
-你的任务是压缩历史对话，以便后续模型继续自然地进行对话。
-
-请使用中文总结。
-
-请重点保留：
-
-1. 用户明确表达的长期目标
-2. 用户明确告诉模型的个人偏好、事实和重要信息
-3. 已经完成的任务和已经确定的结论
-4. 当前正在进行的任务
-5. 尚未解决的问题
-6. 对后续回答非常重要的上下文关系
-
-不要记录：
-- 无意义的寒暄
-- 重复内容
-- 与当前任务无关的细节
-- 对用户意图的无根据推测
-
-总结应简洁，但必须保留后续继续对话所需要的信息。
-
-请按照以下格式输出：
-
-## 会话目标
-...
-
-## 重要上下文
-...
-
-## 已完成
-...
-
-## 未完成
-...
-
-## 下一步
-...
-
-<messages>
-Messages to summarize:
-{messages}
-</messages>
-"""
 
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import (
@@ -274,11 +230,48 @@ class MomoDynamicToolMiddleware(AgentMiddleware[AgentState[Any], ContextT, Any])
             return await handler(request.override(tools=tools))
         return await handler(request)
 
+    def _find_dynamic_tool(self, tool_name: str) -> BaseTool | None:
+        ins = agentMgr.get_agent_ins(self.agent_name)
+        if not ins:
+            return None
+        for t in ins.toolPiecer.get_full_tool():
+            if t.name == tool_name:
+                return t
+        return None
+
+    @override
+    def wrap_tool_call(
+        self,
+        request: ToolCallRequest,
+        handler: Callable[[ToolCallRequest], ToolMessage | Command[Any]],
+    ) -> ToolMessage | Command[Any]:
+        # 动态注入的工具（MCP 等）不在 create_agent 时的 ToolNode 注册表里，
+        # 模型能"看见"它们（wrap_model_call 注入清单）但执行器不认识，
+        # 这里在执行前按名字解析成实例交给 handler
+        tool = self._find_dynamic_tool(request.tool_call["name"])
+        if tool is not None:
+            return handler(request.override(tool=tool))
+        return handler(request)
+
+    @override
+    async def awrap_tool_call(
+        self,
+        request: ToolCallRequest,
+        handler: Callable[[ToolCallRequest], Awaitable[ToolMessage | Command[Any]]],
+    ) -> ToolMessage | Command[Any]:
+        tool = self._find_dynamic_tool(request.tool_call["name"])
+        if tool is not None:
+            return await handler(request.override(tool=tool))
+        return await handler(request)
+
 #todo 这些变量整理出config.py/ yaml
 MOMO_INTERNAL_AGENT_NAME = "momo_internal"
 MOMO_AGENT_NAME = "momo"
 MomoPromptPiecer = PromptPiecer()
 MomoPromptPiecer.add(PromptData("system", system_prompt))
+
+# 记忆预热片段（momo_memory_prompt）由 LangChain.MCPClient._load_boot_context
+# 在启动时经 engram 的 boot_context 工具拉取后动态注入（key="momo_memory"）
 MomoToolPiecer = ToolPiecer()
 MomoToolPiecer.add(ToolData("main", MainTools))
 
@@ -300,8 +293,8 @@ agentMgr.add_agent_ins(
             ArchivingSummarizationMiddleware(
                 MOMO_AGENT_NAME,
                 model=LLMMgr.get_llm("summary"),
-                trigger=("tokens", 10000),
-                keep=("tokens", 4000),
+                trigger=("tokens", 30000),
+                keep=("tokens", 5000),
                 summary_prompt=SUMMARY_PROMPT,
             ),
         ],
@@ -359,29 +352,30 @@ MomoInternalContextEditorMiddleware: ContextEditingMiddleware[
 )
 
 internalCheckpointer = InMemorySaver()
-temPromptPiecer = PromptPiecer()
-temPromptPiecer.add(PromptData("system", internal_system_prompt))
-temToolPiecer = ToolPiecer()
-temToolPiecer.add(ToolData("main", InternalTools))
+MomoInternalPromptPiecer = PromptPiecer()
+MomoInternalPromptPiecer.add(PromptData("system", internal_system_prompt))
+MomoInternalToolPiecer = ToolPiecer()
+MomoInternalToolPiecer.add(ToolData("main", InternalTools))
 agentMgr.add_agent_ins(
     MOMO_INTERNAL_AGENT_NAME,
     create_agent(
         model=LLMMgr.get_llm("internal_agnet"),
-        tools=temToolPiecer.get_full_tool(),
-        system_prompt=temPromptPiecer.get_full_text(),
+        tools=MomoInternalToolPiecer.get_full_tool(),
+        system_prompt=MomoInternalPromptPiecer.get_full_text(),
         middleware=[
             MomoInternalContextEditorMiddleware,
+            MomoDynamicToolMiddleware(MOMO_INTERNAL_AGENT_NAME),
             ArchivingSummarizationMiddleware(
                 MOMO_INTERNAL_AGENT_NAME,
                 model=LLMMgr.get_llm("summary"),
-                trigger=("messages", 100),
+                trigger=("messages", 150),
                 keep=("messages", 10),
-                summary_prompt=SUMMARY_PROMPT,
+                summary_prompt=SUMMARY_INTERNAL_PROMPT,
             ),
         ],
         checkpointer=internalCheckpointer,
         context_schema=AgentMetaContext,
     ),
-    temPromptPiecer,
-    temToolPiecer,
+    MomoInternalPromptPiecer,
+    MomoInternalToolPiecer,
 )
