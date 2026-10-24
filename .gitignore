@@ -59,3 +59,10 @@ third_party/Submit/desktop/dist/
 !/third_party/Submit/
 !/third_party/Debug/
 /third_party/Debug/context/
+
+# ===== 待办面板与本地调试产物（已迁移到 E:\Study\TodoBoard，不入库）=====
+/workbench/
+/.trae-html-share-packages/
+/.dsh-plugins/_probe-*.mjs
+/scripts/probe-*.js
+/panel-*.png
